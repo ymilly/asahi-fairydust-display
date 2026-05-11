@@ -495,6 +495,18 @@ setup_display_script() {
 
     USERNAME=$(whoami)
     HOMEDIR=$(eval echo ~"$USERNAME")
+    AUTOSTART_ENTRY="$HOMEDIR/.config/autostart/fairydust-display.desktop"
+    UDEV_RULE="/etc/udev/rules.d/95-fairydust-hotplug.rules"
+
+    # Skip if any of the three already exist — created on a previous run.
+    # Update path: don't re-emit files the user may have modified or
+    # already removed intentionally. To force recreation, delete the three
+    # files manually and re-run.
+    if [[ -f "$DISPLAY_SCRIPT" || -f "$AUTOSTART_ENTRY" || -f "$UDEV_RULE" ]]; then
+        ok "Display hotplug already configured — skipping"
+        info "  To recreate, remove: $DISPLAY_SCRIPT, $AUTOSTART_ENTRY, $UDEV_RULE"
+        return
+    fi
 
     # Create the display setup script
     cat > "$DISPLAY_SCRIPT" << DISPEOF
