@@ -215,10 +215,21 @@ configure_kernel() {
 
     cd "$CLONE_DIR"
 
-    # Start with current Fedora kernel config
+    # Start with current Fedora kernel config.
+    # Fairydust kernels don't deploy a /boot/config-<kver>, only Fedora's
+    # standard kernel RPM does — so when this script is rerun under a
+    # previously built fairydust kernel, the matching config won't exist.
+    # Fall back to the newest standard Fedora-Asahi config in /boot.
     CURRENT_CONFIG="/boot/config-$(uname -r)"
     if [[ ! -f "$CURRENT_CONFIG" ]]; then
-        error "Cannot find current kernel config at $CURRENT_CONFIG"
+        FALLBACK_CONFIG=$(ls -1v /boot/config-*+16k 2>/dev/null | tail -n1)
+        if [[ -n "$FALLBACK_CONFIG" && -f "$FALLBACK_CONFIG" ]]; then
+            warn "No config at $CURRENT_CONFIG (fairydust kernels don't deploy one)"
+            warn "Falling back to newest standard kernel config: $FALLBACK_CONFIG"
+            CURRENT_CONFIG="$FALLBACK_CONFIG"
+        else
+            error "Cannot find current kernel config at $CURRENT_CONFIG (and no Fedora-Asahi fallback in /boot)"
+        fi
     fi
 
     cp "$CURRENT_CONFIG" .config
