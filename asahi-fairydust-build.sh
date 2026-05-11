@@ -69,6 +69,61 @@ confirm() {
     [[ "$response" =~ ^[Yy]$ ]]
 }
 
+# --- Build State Banner ---
+# Prints a snapshot of what this run is starting from: source tree status,
+# upstream commit, build cache, currently-installed fairydust kernel. Helps
+# the user see whether this is a fresh install or an update before
+# committing to the run.
+state_banner() {
+    echo ""
+    info "=== Build state ==="
+
+    local tree_state="not present (will clone)"
+    local tree_commit=""
+    local branch_name=""
+    local upstream_state=""
+    local build_state="none (clean build needed)"
+    local installed_fd
+
+    if [[ -d "$CLONE_DIR/.git" ]]; then
+        # shellcheck disable=SC2164
+        pushd "$CLONE_DIR" >/dev/null
+        tree_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "?")
+        branch_name=$(git branch --show-current 2>/dev/null || echo "?")
+        tree_state="present ($branch_name @ $tree_commit)"
+
+        # Check if behind upstream — bounded so a slow GitHub doesn't block.
+        local upstream_head=""
+        upstream_head=$(timeout 5 git ls-remote https://github.com/AsahiLinux/linux.git "refs/heads/$BRANCH" 2>/dev/null | awk '{print $1}' | cut -c1-7)
+        if [[ -n "$upstream_head" ]]; then
+            if [[ "$upstream_head" == "$tree_commit"* ]]; then
+                upstream_state="origin/$BRANCH @ $upstream_head (UP TO DATE)"
+            else
+                upstream_state="origin/$BRANCH @ $upstream_head (UPDATE AVAILABLE)"
+            fi
+        else
+            upstream_state="(unable to reach github.com — skipping)"
+        fi
+
+        if [[ -f arch/arm64/boot/Image ]]; then
+            local image_date
+            image_date=$(stat -c '%y' arch/arm64/boot/Image 2>/dev/null | cut -d. -f1)
+            build_state="cached (Image present, $image_date) — incremental build"
+        fi
+        popd >/dev/null
+    fi
+
+    installed_fd=$(ls -1d /lib/modules/*-fairydust+ 2>/dev/null | sort -V | tail -n1 | xargs -r basename)
+    [[ -z "$installed_fd" ]] && installed_fd="none"
+
+    echo "  Source tree:   $tree_state"
+    [[ -n "$upstream_state" ]] && echo "  Upstream:      $upstream_state"
+    echo "  Build cache:   $build_state"
+    echo "  Installed FD:  $installed_fd"
+    echo "  Running:       $(uname -r)"
+    echo ""
+}
+
 # --- Pre-flight Checks ---
 preflight() {
     echo ""
@@ -116,7 +171,9 @@ preflight() {
         fi
     fi
 
-    echo ""
+    # Show what this run is starting from before asking for confirmation.
+    state_banner
+
     warn "This script will:"
     echo "  - Install build dependencies (~2GB)"
     echo "  - Clone the Asahi Linux kernel source (~3GB)"
