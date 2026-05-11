@@ -245,14 +245,44 @@ clone_source() {
     echo ""
     info "=== Step 2/9: Cloning fairydust kernel source ==="
 
-    if [[ -d "$CLONE_DIR" ]]; then
-        warn "Directory $CLONE_DIR already exists."
+    if [[ -d "$CLONE_DIR/.git" ]]; then
+        cd "$CLONE_DIR"
+        warn "Existing source tree at $CLONE_DIR"
+        info "  Current HEAD: $(git log --oneline -1)"
+        echo ""
+        echo "  1) Use existing tree as-is (default — fastest, no network)"
+        echo "  2) Fetch + fast-forward to latest origin/$BRANCH (recommended for updates)"
+        echo "  3) Delete and re-clone (slow; only if the tree is corrupt)"
+        echo ""
+        read -rp "$(echo -e "${YELLOW}Choose [1/2/3, default 1]:${NC} ")" choice
+        case "${choice:-1}" in
+            1)
+                info "Using existing source tree."
+                return
+                ;;
+            2)
+                info "Fetching latest from origin/$BRANCH..."
+                git fetch --depth 1 origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+                git reset --hard "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+                ok "Updated to $(git log --oneline -1)"
+                return
+                ;;
+            3)
+                info "Removing $CLONE_DIR for clean re-clone..."
+                cd - >/dev/null
+                rm -rf "$CLONE_DIR"
+                ;;
+            *)
+                warn "Invalid choice; using existing tree."
+                return
+                ;;
+        esac
+    elif [[ -d "$CLONE_DIR" ]]; then
+        warn "$CLONE_DIR exists but is not a git checkout."
         if confirm "Delete and re-clone?"; then
             rm -rf "$CLONE_DIR"
         else
-            info "Using existing source tree."
-            cd "$CLONE_DIR"
-            return
+            error "Cannot proceed — $CLONE_DIR exists and is not a git repo. Delete it manually or change CLONE_DIR at the top of this script."
         fi
     fi
 
