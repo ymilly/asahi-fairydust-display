@@ -89,15 +89,22 @@ state_banner() {
     if [[ -d "$CLONE_DIR/.git" ]]; then
         # shellcheck disable=SC2164
         pushd "$CLONE_DIR" >/dev/null
+        local tree_commit_full=""
+        tree_commit_full=$(git rev-parse HEAD 2>/dev/null || echo "")
         tree_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "?")
         branch_name=$(git branch --show-current 2>/dev/null || echo "?")
         tree_state="present ($branch_name @ $tree_commit)"
 
         # Check if behind upstream — bounded so a slow GitHub doesn't block.
+        # Compare full SHAs (git rev-parse --short auto-extends past 7 chars
+        # to keep abbreviations unique, so short-vs-short would falsely
+        # report mismatches when the abbreviations are different lengths).
+        local upstream_head_full=""
         local upstream_head=""
-        upstream_head=$(timeout 5 git ls-remote https://github.com/AsahiLinux/linux.git "refs/heads/$BRANCH" 2>/dev/null | awk '{print $1}' | cut -c1-7)
-        if [[ -n "$upstream_head" ]]; then
-            if [[ "$upstream_head" == "$tree_commit"* ]]; then
+        upstream_head_full=$(timeout 5 git ls-remote https://github.com/AsahiLinux/linux.git "refs/heads/$BRANCH" 2>/dev/null | awk '{print $1}')
+        upstream_head="${upstream_head_full:0:7}"
+        if [[ -n "$upstream_head_full" ]]; then
+            if [[ "$upstream_head_full" == "$tree_commit_full" ]]; then
                 upstream_state="origin/$BRANCH @ $upstream_head ${GREEN}(UP TO DATE)${NC}"
                 upstream_headline="${GREEN}>>> Source tree is up to date with upstream fairydust${NC}"
             else
