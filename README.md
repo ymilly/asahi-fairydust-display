@@ -12,6 +12,7 @@ Apple Silicon MacBooks (M1/M2) running Asahi Linux cannot output to external dis
 |--------|--------|
 | MacBook Air M1 | Tested (39C3 demo, community reports) |
 | MacBook Air M2 | ✅ Tested and working |
+| MacBook Pro 13" M1 (Touch Bar, 2020) | ✅ Tested and working |
 | MacBook Pro M1 Pro | Tested by community |
 | MacBook Pro M1 Max | Untested (should work) |
 | MacBook Pro M2 Pro/Max | Untested (should work) |
