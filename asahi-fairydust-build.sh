@@ -510,6 +510,16 @@ setup_display_script() {
     echo ""
     info "=== Step 9/9: Creating display hotplug script ==="
 
+    # Helper is xrandr-based — X11 only. On Wayland the compositor handles
+    # display arrangement natively once the kernel exposes the connector
+    # (which fairydust does), so the helper would sit there doing nothing.
+    # Fedora Asahi GNOME defaults to Wayland; skip there.
+    if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
+        info "Wayland session detected — skipping (display helper is xrandr-based, X11 only)"
+        info "  On Wayland, GNOME/KDE arrange external displays natively via the compositor."
+        return
+    fi
+
     USERNAME=$(whoami)
     HOMEDIR=$(eval echo ~"$USERNAME")
     AUTOSTART_ENTRY="$HOMEDIR/.config/autostart/fairydust-display.desktop"
