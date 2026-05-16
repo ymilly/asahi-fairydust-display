@@ -49,7 +49,7 @@ chmod +x asahi-fairydust-build.sh
 7. Installs kernel, modules, and device tree blobs
 8. Updates m1n1 bootloader and GRUB
 9. Sets up automatic typec module loading
-10. Creates a display hotplug script for automatic configuration
+10. Creates a display hotplug script for X11 sessions (skipped on Wayland — GNOME handles display arrangement natively once the kernel exposes the connector)
 
 ## Important Notes
 
@@ -63,7 +63,7 @@ chmod +x asahi-fairydust-build.sh
 ```bash
 # Check kernel
 uname -r
-# Expected: 6.18.x-fairydust+
+# Expected: should end in -fairydust+ (e.g., 6.19.14-fairydust+)
 
 # Check GPU acceleration (NOT llvmpipe)
 glxinfo | grep "OpenGL renderer"
@@ -73,9 +73,14 @@ glxinfo | grep "OpenGL renderer"
 lsmod | grep asahi
 # Expected: asahi  1179648  0
 
-# Check display output
+# Check display output (X11)
 xrandr
 # Expected: DP-1 connected with resolutions listed
+
+# Check display output (Wayland — xrandr won't work)
+ls /sys/class/drm/ | grep DP
+# Expected: card?-DP-1 (and possibly card?-DP-1-1, etc. for chained displays)
+# Or open GNOME Settings → Displays
 ```
 
 ## Uninstall
@@ -112,7 +117,8 @@ Or build on an external SSD.
 
 - Try the **other** USB-C port
 - Check kernel logs: `dmesg | tail -50`
-- Force detection: `xrandr --output DP-1 --auto`
+- Force detection (X11): `xrandr --output DP-1 --auto`
+- Force detection (Wayland): unplug + replug the adapter, or open GNOME Settings → Displays
 - Ensure typec modules are loaded: `lsmod | grep typec`
 
 ### m1n1 update fails
