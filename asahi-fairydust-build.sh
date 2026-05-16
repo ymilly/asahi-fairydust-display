@@ -82,6 +82,7 @@ state_banner() {
     local tree_commit=""
     local branch_name=""
     local upstream_state=""
+    local upstream_headline=""
     local build_state="none (clean build needed)"
     local installed_fd
 
@@ -97,12 +98,15 @@ state_banner() {
         upstream_head=$(timeout 5 git ls-remote https://github.com/AsahiLinux/linux.git "refs/heads/$BRANCH" 2>/dev/null | awk '{print $1}' | cut -c1-7)
         if [[ -n "$upstream_head" ]]; then
             if [[ "$upstream_head" == "$tree_commit"* ]]; then
-                upstream_state="origin/$BRANCH @ $upstream_head (UP TO DATE)"
+                upstream_state="origin/$BRANCH @ $upstream_head ${GREEN}(UP TO DATE)${NC}"
+                upstream_headline="${GREEN}>>> Source tree is up to date with upstream fairydust${NC}"
             else
-                upstream_state="origin/$BRANCH @ $upstream_head (UPDATE AVAILABLE)"
+                upstream_state="origin/$BRANCH @ $upstream_head ${YELLOW}(UPDATE AVAILABLE)${NC}"
+                upstream_headline="${YELLOW}>>> Update available: $tree_commit → $upstream_head${NC} (pick 'fetch' at the source-tree prompt to apply)"
             fi
         else
             upstream_state="(unable to reach github.com — skipping)"
+            upstream_headline="${YELLOW}>>> Could not reach github.com — update check skipped${NC}"
         fi
 
         if [[ -f arch/arm64/boot/Image ]]; then
@@ -116,11 +120,17 @@ state_banner() {
     installed_fd=$(ls -1d /lib/modules/*-fairydust+ 2>/dev/null | sort -V | tail -n1 | xargs -r basename)
     [[ -z "$installed_fd" ]] && installed_fd="none"
 
-    echo "  Source tree:   $tree_state"
-    [[ -n "$upstream_state" ]] && echo "  Upstream:      $upstream_state"
-    echo "  Build cache:   $build_state"
-    echo "  Installed FD:  $installed_fd"
-    echo "  Running:       $(uname -r)"
+    # Headline first so the "is there an update?" answer arrives before the table.
+    if [[ -n "$upstream_headline" ]]; then
+        echo -e "$upstream_headline"
+        echo ""
+    fi
+
+    echo    "  Source tree:   $tree_state"
+    [[ -n "$upstream_state" ]] && echo -e "  Upstream:      $upstream_state"
+    echo    "  Build cache:   $build_state"
+    echo    "  Installed FD:  $installed_fd"
+    echo    "  Running:       $(uname -r)"
     echo ""
 }
 
