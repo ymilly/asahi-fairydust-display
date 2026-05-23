@@ -257,6 +257,68 @@ install_deps() {
     info "  bindgen: $(bindgen --version)"
 }
 
+# Show what's new in origin/$BRANCH vs the current source-tree HEAD.
+# Filters DTS changes to the running machine (via /proc/device-tree/compatible)
+# so the user can tell at a glance whether an update touches their hardware.
+# Read-only — fetches refs but does not modify HEAD or working tree.
+preview_upstream() {
+    info "Fetching upstream refs (read-only — no changes to your tree)..."
+    if ! git fetch --depth 10 origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE" >/dev/null; then
+        warn "  git fetch failed (network? auth?) — cannot preview."
+        return
+    fi
+
+    local new_commits
+    new_commits=$(git log --oneline HEAD..FETCH_HEAD 2>/dev/null)
+    if [[ -z "$new_commits" ]]; then
+        ok "  Your tree is at or ahead of origin/$BRANCH — nothing new to preview."
+        return
+    fi
+
+    echo ""
+    echo "  --- New commits in origin/$BRANCH not in your tree ---"
+    echo "$new_commits" | sed 's/^/    /'
+
+    echo ""
+    echo "  --- Apple device-tree (DTS) changes ---"
+    local dts_changes
+    dts_changes=$(git log --oneline HEAD..FETCH_HEAD -- 'arch/arm64/boot/dts/apple/*' 2>/dev/null)
+    if [[ -n "$dts_changes" ]]; then
+        echo "$dts_changes" | sed 's/^/    /'
+    else
+        echo "    (none — no Apple DTS files changed)"
+    fi
+
+    local machine="" chip=""
+    if [[ -r /proc/device-tree/compatible ]]; then
+        local compat
+        compat=$(tr '\0' '\n' < /proc/device-tree/compatible 2>/dev/null)
+        machine=$(echo "$compat" | grep -oE 'apple,j[0-9]+[a-z]*' | head -1 | cut -d, -f2)
+        chip=$(echo "$compat" | grep -oE 'apple,t[0-9]+' | head -1 | cut -d, -f2)
+    fi
+
+    if [[ -n "$machine" ]]; then
+        echo ""
+        echo "  --- Changes touching your machine ($machine on ${chip:-?}) ---"
+        local own_changes
+        own_changes=$(git log --oneline HEAD..FETCH_HEAD -- "arch/arm64/boot/dts/apple/*${machine}*" 2>/dev/null)
+        if [[ -n "$own_changes" ]]; then
+            echo "$own_changes" | sed 's/^/    /'
+            echo ""
+            warn "  These commits touch DTS files matching your machine — update likely matters."
+        else
+            echo "    (none — no DTS files matching '*${machine}*' changed)"
+            echo ""
+            info "  Nothing in this update specifically targets your machine."
+            info "  Most of the diff is likely the fairydust branch being rebased on a newer Linux base."
+        fi
+    else
+        echo ""
+        info "  (Could not detect machine code from /proc/device-tree/compatible — skipping per-machine filter)"
+    fi
+    echo ""
+}
+
 # --- Step 2: Clone Fairydust Branch ---
 clone_source() {
     echo ""
@@ -270,30 +332,38 @@ clone_source() {
         echo "  1) Use existing tree as-is (default — fastest, no network)"
         echo "  2) Fetch + fast-forward to latest origin/$BRANCH (recommended for updates)"
         echo "  3) Delete and re-clone (slow; only if the tree is corrupt)"
+        echo "  p) Preview what's new in origin/$BRANCH (read-only; returns to this prompt)"
         echo ""
-        read -rp "$(echo -e "${YELLOW}Choose [1/2/3, default 1]:${NC} ")" choice
-        case "${choice:-1}" in
-            1)
-                info "Using existing source tree."
-                return
-                ;;
-            2)
-                info "Fetching latest from origin/$BRANCH..."
-                git fetch --depth 1 origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
-                git reset --hard "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
-                ok "Updated to $(git log --oneline -1)"
-                return
-                ;;
-            3)
-                info "Removing $CLONE_DIR for clean re-clone..."
-                cd - >/dev/null
-                rm -rf "$CLONE_DIR"
-                ;;
-            *)
-                warn "Invalid choice; using existing tree."
-                return
-                ;;
-        esac
+        while true; do
+            read -rp "$(echo -e "${YELLOW}Choose [1/2/3/p, default 1]:${NC} ")" choice
+            case "${choice:-1}" in
+                p|P)
+                    preview_upstream
+                    continue
+                    ;;
+                1)
+                    info "Using existing source tree."
+                    return
+                    ;;
+                2)
+                    info "Fetching latest from origin/$BRANCH..."
+                    git fetch --depth 1 origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+                    git reset --hard "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+                    ok "Updated to $(git log --oneline -1)"
+                    return
+                    ;;
+                3)
+                    info "Removing $CLONE_DIR for clean re-clone..."
+                    cd - >/dev/null
+                    rm -rf "$CLONE_DIR"
+                    break
+                    ;;
+                *)
+                    warn "Invalid choice; using existing tree."
+                    return
+                    ;;
+            esac
+        done
     elif [[ -d "$CLONE_DIR" ]]; then
         warn "$CLONE_DIR exists but is not a git checkout."
         if confirm "Delete and re-clone?"; then
