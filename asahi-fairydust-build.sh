@@ -180,6 +180,16 @@ preflight() {
     fi
     ok "Internet connection available"
 
+    # If we're already on a fairydust kernel and a local source tree exists,
+    # run the upstream preview as the first useful output — before any
+    # rebuild prompts or the state banner. Lets the user see whether an
+    # update touches their machine before being asked to commit to a
+    # 60-90 min build. The same preview is still available later via the
+    # 'p' option in clone_source for first-build users without a local tree.
+    if uname -r | grep -q "fairydust" && [[ -d "$CLONE_DIR/.git" ]]; then
+        ( cd "$CLONE_DIR" && preview_upstream )
+    fi
+
     # Check if already running fairydust
     if uname -r | grep -q "fairydust"; then
         warn "You're already running a fairydust kernel: $(uname -r)"
